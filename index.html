@@ -271,8 +271,8 @@
     const SUPABASE_KEY = "sb_publishable_Y0nkyjzNTiikKczdWbEBg_dJy1O043MTA0ODcyNDMxNzk5ODM0NjQ0";
     // ===========================================
 
-    // Инициализируем клиент supabase ОДИН раз
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // Переименовали переменную в supabaseClient, чтобы избежать конфликтов с расширениями браузера
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let timetable = {}; 
     let allUsers = [];
@@ -286,19 +286,19 @@
 
     // Загрузка глобальной конфигурации из онлайн-БД
     async function loadOnlineConfig() {
-        let { data: config } = await supabase.from('diary_config').select('timetable').single();
+        let { data: config } = await supabaseClient.from('diary_config').select('timetable').single();
         if (config) timetable = config.timetable;
 
-        let { data: users } = await supabase.from('diary_users').select('*');
+        let { data: users } = await supabaseClient.from('diary_users').select('*');
         if (users) allUsers = users;
 
-        let { data: grades } = await supabase.from('diary_grades').select('*');
+        let { data: grades } = await supabaseClient.from('diary_grades').select('*');
         globalGrades = {};
         if (grades) {
             grades.forEach(g => { globalGrades[g.lesson_key] = g.grades_data; });
         }
 
-        let { data: remarks } = await supabase.from('diary_remarks').select('*');
+        let { data: remarks } = await supabaseClient.from('diary_remarks').select('*');
         if (remarks) allRemarks = remarks;
 
         const uniqueSubjects = ["ФИЗИКА ОБЩАЯ","АЛГЕБРА","БИОЛОГИЯ","ФИЗРА","РУСС-ЯЗ","ОБЖ","ИКТ","ХИМИЯ","ГЕОГРАФИЯ","ИСТОРИЯ","ЛИТЕРАТУРА"];
@@ -355,7 +355,7 @@
             let exists = allUsers.find(u => u.name.toLowerCase() === name.toLowerCase());
             if(exists) return alert("Пользователь с таким именем уже есть!");
             
-            await supabase.from('diary_users').insert([{ name, pass, role: currentRole, subject: currentRole === 'teacher' ? subject : null }]);
+            await supabaseClient.from('diary_users').insert([{ name, pass, role: currentRole, subject: currentRole === 'teacher' ? subject : null }]);
             alert("Успешная регистрация! Войдите в систему."); toggleMode();
         } else {
             let account = allUsers.find(u => u.name.toLowerCase() === name.toLowerCase() && u.pass === pass);
@@ -446,14 +446,14 @@
 
     async function changeUserPassword(id, newPass) {
         if(!newPass.trim()) return alert("Пароль не пустой!");
-        await supabase.from('diary_users').update({ pass: newPass.trim() }).eq('id', id);
+        await supabaseClient.from('diary_users').update({ pass: newPass.trim() }).eq('id', id);
         alert("Пароль обновлен глобально!");
         loadOnlineConfig();
     }
 
     async function deleteUser(id) {
         if(confirm("Удалить пользователя?")) {
-            await supabase.from('diary_users').delete().eq('id', id);
+            await supabaseClient.from('diary_users').delete().eq('id', id);
             await loadOnlineConfig();
             renderAdminUsersPanel();
         }
@@ -477,7 +477,7 @@
             const val = document.getElementById(`edit_day_${day}`).value;
             timetable[day] = val.split(',').map(s => s.trim()).filter(s => s !== "");
         }
-        await supabase.from('diary_config').update({ timetable: timetable }).eq('id', 1);
+        await supabaseClient.from('diary_config').update({ timetable: timetable }).eq('id', 1);
         alert("Расписание обновлено на всех устройствах!");
         renderWeekDiary();
     }
@@ -488,7 +488,7 @@
         if(!targetStudent || !text) return alert("Заполните поля!");
         const now = new Date();
         
-        await supabase.from('diary_remarks').insert([{
+        await supabaseClient.from('diary_remarks').insert([{
             id: Date.now(), student_name: targetStudent, teacher_name: currentUser.name,
             subject: currentUser.subject, text: text, date_str: `${now.toLocaleDateString('ru-RU')} в ${now.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})}`
         }]);
@@ -502,7 +502,7 @@
             const box = document.getElementById('alertScrollBox'); box.innerHTML = '';
             for (let r of unread) {
                 box.innerHTML += `<div class="alert-inner-item"><div style="font-size:12px; color:#f87171; font-weight:700;">От: ${r.teacher_name} (${r.subject}) • ${r.date_str}</div><div style="color:#fff; margin-top:5px;">«${r.text}»</div></div>`;
-                await supabase.from('diary_remarks').update({ is_read: true }).eq('id', r.id);
+                await supabaseClient.from('diary_remarks').update({ is_read: true }).eq('id', r.id);
             }
             document.getElementById('remarkAlertOverlay').classList.add('show');
             loadOnlineConfig();
@@ -545,7 +545,6 @@
         const container = document.getElementById('diaryDaysContainer');
         container.innerHTML = '';
 
-        // Единый селектор выбора ученика для учителя в шапке дневника
         if(currentUser.role === 'teacher') {
             let allStudents = allUsers.filter(u => u.role === 'student');
             let studentSelectorHTML = `
@@ -562,7 +561,6 @@
             container.innerHTML += studentSelectorHTML;
         }
 
-        // Рендерим дни недели по расписанию
         for (let dayName in timetable) {
             let dayLessons = timetable[dayName] || [];
             let dayHTML = `
@@ -600,7 +598,6 @@
         renderWeekDiary();
     }
 
-    // Определение контента ячейки (Просмотр для ученика / Ввод для учителя)
     function getGradesCellContent(weekId, dayName, lessonNum, lessonName) {
         let activeStudent = (currentUser.role === 'teacher') ? teacherSelectedStudent : currentUser.name;
         if(!activeStudent) return `<span style="color:var(--text-muted); font-size:12px;">выберите ученика</span>`;
@@ -609,14 +606,12 @@
         let currentGradesStr = globalGrades[lessonKey] || "";
 
         if (currentUser.role === 'teacher') {
-            // Если учитель ведет этот предмет — даем поле ввода, иначе просто показываем оценки
             if(currentUser.subject.toLowerCase() === lessonName.toLowerCase()) {
                 return `<input type="text" class="grade-input-field" data-key="${lessonKey}" value="${currentGradesStr}" placeholder="—" maxlength="15">`;
             } else {
                 return renderStaticBadges(currentGradesStr);
             }
         } else {
-            // Ученики и админы просто видят красивые оценки
             return renderStaticBadges(currentGradesStr);
         }
     }
@@ -637,7 +632,6 @@
         return html;
     }
 
-    // Сохранение изменений учителем в базу данных Supabase
     async function saveGradesData() {
         if(currentUser.role !== 'teacher') return;
         const inputs = document.querySelectorAll('.grade-input-field');
@@ -648,12 +642,11 @@
 
             if(val) {
                 globalGrades[key] = val;
-                // Отправляем запись методом UPSERT (создать или обновить существующую)
-                await supabase.from('diary_grades').upsert([{ lesson_key: key, grades_data: val }], { onConflict: 'lesson_key' });
+                await supabaseClient.from('diary_grades').upsert([{ lesson_key: key, grades_data: val }], { onConflict: 'lesson_key' });
             } else {
                 if(globalGrades[key]) {
                     delete globalGrades[key];
-                    await supabase.from('diary_grades').delete().eq('lesson_key', key);
+                    await supabaseClient.from('diary_grades').delete().eq('lesson_key', key);
                 }
             }
         }
@@ -661,7 +654,6 @@
         loadOnlineConfig();
     }
 
-    // Первая автозагрузка при старте страницы
     window.onload = function() {
         loadOnlineConfig();
     };
