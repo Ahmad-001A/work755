@@ -1,8 +1,6 @@
 backend:
-  name: github
-  repo: Ahmad-001A/work755
-  branch: main
-
+  name: git-gateway
+  branch: main # или master, смотря как называется твоя главная ветка в GitHub
 media_folder: "assets"
 public_folder: "/assets"
 
