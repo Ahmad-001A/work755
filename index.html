@@ -266,12 +266,13 @@
 </div>
 
 <script>
-    // === ВСТАВЬ СЮДА СВОИ ДАННЫЕ ИЗ SUPABASE ===
+// === ВСТАВЬ СЮДА СВОИ ДАННЫЕ ИЗ SUPABASE ===
     const SUPABASE_URL = "https://kyfnpsnnmyhapktyulf.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_YOncKyjzNTiiKkCzdWbEBg_dJylOA-9";
+    const SUPABASE_KEY = "sb_publishable_Y0nkyjzNTiikKczdWbEBg_dJy1O043MTA0ODcyNDMxNzk5ODM0NjQ0";
     // ===========================================
 
-    const supabase = db.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // ЗДЕСЬ МЫ ОСТАВЛЯЕМ ТОЛЬКО ОДНО ОБЪЯВЛЕНИЕ:
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let timetable = {}; 
     let allUsers = [];
