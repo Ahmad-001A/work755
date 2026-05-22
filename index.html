@@ -23,7 +23,7 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
-        body { background: var(--bg); color: var(--text-main); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; cubic-bezier: (0.4, 0, 0.2, 1); }
+        body { background: var(--bg); color: var(--text-main); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
 
         .glass-panel {
             width: 100%;
@@ -120,7 +120,7 @@
         .badge-good { background: rgba(59, 130, 246, 0.18); color: #3b82f6; border-color: rgba(59, 130, 246, 0.35); } 
         .badge-satisfactory { background: rgba(245, 158, 11, 0.18); color: #f59e0b; border-color: rgba(245, 158, 11, 0.35); }  
         .badge-unsatisfactory { background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }  
-        .badge-critical { background: rgba(220, 38, 38, 0.3); color: #f87171; border-color: #dc2626; animation: shake 0.5s ease-in-out infinite alternate; }
+        .badge-critical { background: rgba(220, 38, 38, 0.3); color: #f87171; border-color: #dc2626; }
 
         .teacher-selector-wrapper { display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,0.2); padding: 8px 16px; border-radius: 12px; border: 1px solid var(--glass-border); }
         .student-select-dropdown { background: #0f172a; color: white; border: 1px solid var(--glass-border); padding: 8px 14px; border-radius: 8px; font-size: 14px; outline: none; min-width: 220px; }
@@ -300,7 +300,6 @@
     let currentWeekIndex = 0;
     let teacherSelectedStudent = ""; 
 
-    // Свежий список уникальных предметов на основе встроенного массива расписания
     function getUniqueSubjectsFromTimetable() {
         const unique = [];
         for(let day in timetable) {
@@ -311,9 +310,7 @@
         return unique.sort();
     }
 
-    // Инициализация обработчиков нажатия клавиши Enter
     document.addEventListener("DOMContentLoaded", () => {
-        // Логин по Enter
         const authFields = ['authName', 'authPass'];
         authFields.forEach(id => {
             document.getElementById(id).addEventListener("keydown", (e) => {
@@ -321,7 +318,6 @@
             });
         });
 
-        // Замечание учителя по Enter
         document.getElementById('remarkText').addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -355,9 +351,22 @@
             uniqueSubjects.forEach(s => { subSelect.innerHTML += `<option value="${s}">${s}</option>`; });
         }
         
+        const today = new Date();
+        const foundIndex = academicWeeks.findIndex(w => {
+            const start = parseDate(w.startStr);
+            const end = parseDate(w.endStr);
+            return today >= start && today <= end;
+        });
+        if (foundIndex !== -1) currentWeekIndex = foundIndex;
+
         if(currentUser) {
             renderWeekDiary();
         }
+    }
+
+    function parseDate(str) {
+        const parts = str.split('.');
+        return new Date(parts[2], parts[1] - 1, parts[0]);
     }
 
     function generateAcademicWeeks() {
@@ -472,15 +481,27 @@
 
     function logout() { currentUser = null; document.getElementById('dashboardScreen').classList.remove('active'); document.getElementById('authScreen').classList.add('active'); }
 
-    // Возвращает CSS класс бэйджа в зависимости от оценки по 10-балльной системе
     function getGradeClass10(gradeStr) {
         const val = parseFloat(gradeStr);
         if (isNaN(val)) return '';
-        if (val >= 9) return 'badge-excellent';      // 9, 10
-        if (val >= 7) return 'badge-good';           // 7, 8
-        if (val >= 5) return 'badge-satisfactory';   // 5, 6
-        if (val >= 3) return 'badge-unsatisfactory'; // 3, 4
-        return 'badge-critical';                     // 1, 2
+        if (val >= 9) return 'badge-excellent';      
+        if (val >= 7) return 'badge-good';           
+        if (val >= 5) return 'badge-satisfactory';   
+        if (val >= 3) return 'badge-unsatisfactory'; 
+        return 'badge-critical';                     
+    }
+
+    function changeWeek(direction) {
+        let newIndex = currentWeekIndex + direction;
+        if(newIndex >= 0 && newIndex < academicWeeks.length) {
+            currentWeekIndex = newIndex;
+            renderWeekDiary();
+        }
+    }
+
+    function selectStudentForTeacher(studentName) {
+        teacherSelectedStudent = studentName;
+        renderWeekDiary();
     }
 
     function renderWeekDiary() {
@@ -489,7 +510,6 @@
         const container = document.getElementById('diaryDaysContainer');
         container.innerHTML = '';
 
-        // Если зашел учитель, добавим селектор выбора ученика сверху расписания
         if(currentUser.role === 'teacher') {
             let selectHTML = `
                 <div class="teacher-selector-wrapper" style="margin-bottom: 20px;">
@@ -505,7 +525,6 @@
             container.innerHTML += selectHTML;
         }
 
-        // Рендеринг дней недели
         for(let day in timetable) {
             let dayDate = new Date(week.daysDates[day]).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'});
             let dayBlock = document.createElement('div');
@@ -513,201 +532,113 @@
             
             let html = `<div class="day-header"><span>${day}</span><span style="font-size:13px; color:var(--text-muted);">${dayDate}</span></div>`;
             
-            timetable[day].forEach((lesson, index) => {
+            timetable[day].forEach((lessonName, index) => {
                 let lessonNum = index + 1;
                 let targetUser = (currentUser.role === 'teacher') ? teacherSelectedStudent : currentUser.name;
-                
-                let lessonKey = `w${week.id}_${day}_L${lessonNum}_${lesson}`;
-                let currentGrades = (globalGrades[lessonKey] && globalGrades[lessonKey][targetUser]) ? globalGrades[lessonKey][targetUser] : [];
+                let lessonKey = `w${week.id}_${day}_L${lessonNum}_${lessonName}_${targetUser}`;
+                let currentGrades = globalGrades[lessonKey] || [];
 
-                let gradesHTML = `<div class="grades-container">`;
+                let gradesHTML = '';
+                
                 if(currentUser.role === 'teacher') {
-                    // Если учитель ведет этот предмет, открываем ввод
-                    if(currentUser.subject === lesson && teacherSelectedStudent) {
-                        let currentValues = currentGrades.join(', ');
-                        gradesHTML += `<input type="text" class="grade-input-field" data-key="${lessonKey}" value="${currentValues}" placeholder="1-10" title="Вводите оценки через запятую">`;
+                    let isMySubject = (lessonName.toLowerCase() === currentUser.subject.toLowerCase());
+                    if(isMySubject && teacherSelectedStudent) {
+                        let val1 = currentGrades[0] || '';
+                        let val2 = currentGrades[1] || '';
+                        let val3 = currentGrades[2] || '';
+                        
+                        gradesHTML = `
+                            <div class="grades-container">
+                                <input type="text" class="grade-input-field ${getGradeClass10(val1)}" data-key="${lessonKey}" data-idx="0" value="${val1}" maxlength="2">
+                                <input type="text" class="grade-input-field ${getGradeClass10(val2)}" data-key="${lessonKey}" data-idx="1" value="${val2}" maxlength="2">
+                                <input type="text" class="grade-input-field ${getGradeClass10(val3)}" data-key="${lessonKey}" data-idx="2" value="${val3}" maxlength="2">
+                            </div>
+                        `;
                     } else {
-                        // Просто просмотр для учителя чужих предметов
                         currentGrades.forEach(g => {
-                            gradesHTML += `<span class="grade-view-badge ${getGradeClass10(g)}">${g}</span>`;
+                            if(g) gradesHTML += `<span class="grade-view-badge ${getGradeClass10(g)}">${g}</span>`;
                         });
                     }
-                } else if(currentUser.role === 'student') {
-                    // Обычный вид для ученика
+                } else {
                     currentGrades.forEach(g => {
-                        gradesHTML += `<span class="grade-view-badge ${getGradeClass10(g)}">${g}</span>`;
+                        if(g) gradesHTML += `<span class="grade-view-badge ${getGradeClass10(g)}">${g}</span>`;
                     });
                 }
-                gradesHTML += `</div>`;
 
                 html += `
                     <div class="row-lesson">
                         <div class="lesson-num">${lessonNum}</div>
-                        <div class="lesson-name">${lesson}</div>
-                        ${gradesHTML}
+                        <div class="lesson-name">${lessonName}</div>
+                        <div class="grades-container">${gradesHTML || '<span style="color:var(--text-muted); font-size:14px;">—</span>'}</div>
                     </div>
                 `;
             });
-            
+
             dayBlock.innerHTML = html;
             container.appendChild(dayBlock);
-        }
-
-        // Привязываем сохранение по Enter во всех инпутах оценок
-        if(currentUser.role === 'teacher') {
-            document.querySelectorAll('.grade-input-field').forEach(input => {
-                input.addEventListener("keydown", (e) => {
-                    if (e.key === "Enter") { saveGradesData(); }
-                });
-            });
-        }
-    }
-
-    function selectStudentForTeacher(name) {
-        teacherSelectedStudent = name;
-        renderWeekDiary();
-    }
-
-    function changeWeek(dir) {
-        let nextIdx = currentWeekIndex + dir;
-        if(nextIdx >= 0 && nextIdx < academicWeeks.length) {
-            currentWeekIndex = nextIdx;
-            renderWeekDiary();
         }
     }
 
     async function saveGradesData() {
-        if(!teacherSelectedStudent) return alert("Выберите ученика перед сохранением!");
+        if(currentUser.role !== 'teacher' || !teacherSelectedStudent) return;
         const inputs = document.querySelectorAll('.grade-input-field');
-        
-        for(let input of inputs) {
+        let localChanges = {};
+
+        inputs.forEach(input => {
             let key = input.dataset.key;
+            let idx = parseInt(input.dataset.idx);
             let val = input.value.trim();
-            
-            // Преобразуем строку в массив десятичных оценок от 1 до 10
-            let gradesArr = val.split(',')
-                               .map(s => s.trim())
-                               .filter(s => s !== "")
-                               .map(s => {
-                                   let parsed = parseInt(s, 10);
-                                   return (parsed >= 1 && parsed <= 10) ? parsed : null;
-                               })
-                               .filter(g => g !== null);
 
-            if(!globalGrades[key]) globalGrades[key] = {};
-            globalGrades[key][teacherSelectedStudent] = gradesArr;
+            if(!localChanges[key]) localChanges[key] = globalGrades[key] || ['', '', ''];
+            localChanges[key][idx] = val;
+        });
 
-            // Отправляем запись в Supabase синхронно для каждого измененного инпута
-            let { data } = await supabaseClient.from('diary_grades').select('*').eq('lesson_key', key).single();
-            if(data) {
-                await supabaseClient.from('diary_grades').update({ grades_data: globalGrades[key] }).eq('lesson_key', key);
+        for(let key in localChanges) {
+            let filteredArray = localChanges[key].filter(x => x !== '');
+            globalGrades[key] = filteredArray;
+
+            let { data } = await supabaseClient.from('diary_grades').select('*').eq('lesson_key', key);
+            if(data && data.length > 0) {
+                await supabaseClient.from('diary_grades').update({ grades_data: filteredArray }).eq('lesson_key', key);
             } else {
-                await supabaseClient.from('diary_grades').insert([{ lesson_key: key, grades_data: globalGrades[key] }]);
+                if(filteredArray.length > 0) {
+                    await supabaseClient.from('diary_grades').insert([{ lesson_key: key, grades_data: filteredArray }]);
+                }
             }
         }
-        alert("Оценки по 10-балльной системе успешно сохранены онлайн!");
-        loadOnlineConfig();
-    }
-
-    function renderAdminUsersPanel() {
-        const tbody = document.getElementById('adminUsersTableBody');
-        tbody.innerHTML = '';
-        allUsers.forEach((user) => {
-            if(user.role === 'admin') return;
-            tbody.innerHTML += `
-                <tr>
-                    <td><strong>${user.name}</strong></td>
-                    <td>${user.role === 'teacher' ? '💼 Учитель' : '🎒 Ученик'}</td>
-                    <td>${user.subject ? user.subject : '—'}</td>
-                    <td>
-                        <input type="text" id="pass_user_${user.id}" value="${user.pass}" style="width:120px; padding:6px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); color:white; border-radius:6px;">
-                    </td>
-                    <td>
-                        <button class="danger-btn" onclick="deleteUser('${user.id}')">Удалить</button>
-                    </td>
-                </tr>
-            `;
-        });
-
-        // Поддержка Enter для изменения паролей в админке
-        allUsers.forEach((user) => {
-            if(user.role === 'admin') return;
-            document.getElementById(`pass_user_${user.id}`).addEventListener("keydown", (e) => {
-                if(e.key === "Enter") { changeUserPassword(user.id, e.target.value); }
-            });
-        });
-    }
-
-    async function changeUserPassword(id, newPass) {
-        if(!newPass.trim()) return alert("Пароль не должен быть пустым!");
-        await supabaseClient.from('diary_users').update({ pass: newPass.trim() }).eq('id', id);
-        alert("Пароль обновлен в единой базе данных!");
-        loadOnlineConfig();
-    }
-
-    async function deleteUser(id) {
-        if(confirm("Удалить пользователя из системы навсегда?")) {
-            await supabaseClient.from('diary_users').delete().eq('id', id);
-            await loadOnlineConfig();
-            renderAdminUsersPanel();
-        }
-    }
-
-    function renderAdminTimetablePanel() {
-        const container = document.getElementById('adminTimetableFormContainer');
-        container.innerHTML = '';
-        for(let day in timetable) {
-            container.innerHTML += `
-                <div class="input-group">
-                    <label style="font-weight:700; color:var(--accent);">${day.toUpperCase()}</label>
-                    <input type="text" id="edit_day_${day}" value="${timetable[day].join(', ')}">
-                </div>
-            `;
-        }
-
-        for(let day in timetable) {
-            document.getElementById(`edit_day_${day}`).addEventListener("keydown", (e) => {
-                if(e.key === "Enter") { saveNewTimetable(); }
-            });
-        }
-    }
-
-    async function saveNewTimetable() {
-        for(let day in timetable) {
-            const val = document.getElementById(`edit_day_${day}`).value;
-            timetable[day] = val.split(',').map(s => s.trim()).filter(s => s !== "");
-        }
-        await supabaseClient.from('diary_config').update({ timetable: timetable }).eq('id', 1);
-        alert("Глобальное расписание успешно перестроено!");
-        loadOnlineConfig();
+        alert("Оценки успешно сохранены в базе Supabase!");
+        renderWeekDiary();
     }
 
     async function sendRemark() {
-        const targetStudent = document.getElementById('remarkStudentTarget').value;
+        const target = document.getElementById('remarkStudentTarget').value;
         const text = document.getElementById('remarkText').value.trim();
-        if(!targetStudent || !text) return alert("Выберите ученика и напишите текст!");
-        const now = new Date();
-        
+        if(!target || !text) return alert("Выберите ученика и напишите текст!");
+
         await supabaseClient.from('diary_remarks').insert([{
-            student_name: targetStudent, teacher_name: currentUser.name,
-            subject: currentUser.subject, text: text, is_read: false,
-            date_str: `${now.toLocaleDateString('ru-RU')} в ${now.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})}`
+            student_name: target,
+            sender_teacher: `${currentUser.name} (${currentUser.subject})`,
+            remark_text: text,
+            is_read: false,
+            created_at: new Date().toISOString()
         }]);
-        alert("Дисциплинарное замечание доставлено!"); 
-        document.getElementById('remarkText').value = "";
-        loadOnlineConfig();
+
+        document.getElementById('remarkText').value = '';
+        alert(`Замечание для ${target} успешно отправлено!`);
+        await loadOnlineConfig();
     }
 
-    async function checkUnreadRemarksForStudent() {
+    function checkUnreadRemarksForStudent() {
+        if(currentUser.role !== 'student') return;
         let unread = allRemarks.filter(r => r.student_name.toLowerCase() === currentUser.name.toLowerCase() && !r.is_read);
         if(unread.length > 0) {
-            const box = document.getElementById('alertScrollBox');
+            let box = document.getElementById('alertScrollBox');
             box.innerHTML = '';
             unread.forEach(r => {
                 box.innerHTML += `
                     <div class="alert-inner-item">
-                        <div style="font-size:12px; color:var(--danger); font-weight:700; margin-bottom:4px;">${r.subject} — ${r.teacher_name} (${r.date_str})</div>
-                        <div style="font-size:14px; color:white;">${r.text}</div>
+                        <div style="font-size:12px; color:var(--danger); font-weight:700; margin-bottom:4px;">От: ${r.sender_teacher}</div>
+                        <div style="font-size:14px; color:white;">${r.remark_text}</div>
                     </div>
                 `;
             });
@@ -721,18 +652,21 @@
         for(let r of unread) {
             await supabaseClient.from('diary_remarks').update({ is_read: true }).eq('id', r.id);
         }
-        loadOnlineConfig();
+        await loadOnlineConfig();
     }
 
     function updateRemarkBadgeCount() {
-        const badge = document.getElementById('remarkCountBadge');
         if(!currentUser) return;
         let count = 0;
         if(currentUser.role === 'student') {
-            count = allRemarks.filter(r => r.student_name.toLowerCase() === currentUser.name.toLowerCase()).length;
+            count = allRemarks.filter(r => r.student_name.toLowerCase() === currentUser.name.toLowerCase() && !r.is_read).length;
+        } else if(currentUser.role === 'teacher') {
+            count = allRemarks.filter(r => r.sender_teacher.includes(currentUser.name)).length;
         } else {
             count = allRemarks.length;
         }
+        
+        let badge = document.getElementById('remarkCountBadge');
         if(count > 0) {
             badge.innerText = count;
             badge.style.display = 'inline-block';
@@ -742,29 +676,92 @@
     }
 
     function renderRemarksArchive() {
-        const container = document.getElementById('remarksListContainer');
+        let container = document.getElementById('remarksListContainer');
         container.innerHTML = '';
-        let filtered = (currentUser.role === 'student') ? 
-            allRemarks.filter(r => r.student_name.toLowerCase() === currentUser.name.toLowerCase()) : allRemarks;
+        let list = [];
 
-        if(filtered.length === 0) {
-            container.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding:40px;">Замечаний в архиве не обнаружено. Прекрасная дисциплина!</div>`;
+        if(currentUser.role === 'student') {
+            list = allRemarks.filter(r => r.student_name.toLowerCase() === currentUser.name.toLowerCase());
+        } else if(currentUser.role === 'teacher') {
+            list = allRemarks.filter(r => r.sender_teacher.includes(currentUser.name));
+        } else {
+            list = allRemarks;
+        }
+
+        if(list.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-muted);">Замечаний не обнаружено.</p>';
             return;
         }
 
-        filtered.sort((a,b) => b.id - a.id).forEach(r => {
+        list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).forEach(r => {
+            let dateStr = new Date(r.created_at).toLocaleDateString('ru-RU', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
             container.innerHTML += `
                 <div class="remark-item">
                     <div class="remark-meta">
-                        <span>Нарушитель: <strong style="color:white;">${r.student_name}</strong></span>
-                        <span>${r.date_str}</span>
+                        <span>Нарушитель: <b style="color:white;">${r.student_name}</b></span>
+                        <span>${dateStr}</span>
                     </div>
-                    <div class="remark-text">
-                        <span class="remark-sender">[${r.subject}] ${r.teacher_name}:</span> ${r.text}
-                    </div>
+                    <div class="remark-sender">Отправитель: ${r.sender_teacher}</div>
+                    <div class="remark-text" style="margin-top:8px;">${r.remark_text}</div>
                 </div>
             `;
         });
+    }
+
+    function renderAdminUsersPanel() {
+        let body = document.getElementById('adminUsersTableBody');
+        body.innerHTML = '';
+        allUsers.forEach(u => {
+            body.innerHTML += `
+                <tr>
+                    <td><b>${u.name}</b></td>
+                    <td><span style="text-transform:uppercase; font-size:12px; font-weight:700;">${u.role}</span></td>
+                    <td>${u.subject || '—'}</td>
+                    <td><code>${u.pass}</code></td>
+                    <td><button class="danger-btn" onclick="deleteUser(${u.id})">Удалить</button></td>
+                </tr>
+            `;
+        });
+    }
+
+    async function deleteUser(id) {
+        if(!confirm("Удалить пользователя из базы данных?")) return;
+        await supabaseClient.from('diary_users').delete().eq('id', id);
+        alert("Пользователь удален!");
+        await loadOnlineConfig();
+        renderAdminUsersPanel();
+    }
+
+    function renderAdminTimetablePanel() {
+        let container = document.getElementById('adminTimetableFormContainer');
+        container.innerHTML = '';
+        for(let day in timetable) {
+            let lessonsText = timetable[day].join(', ');
+            container.innerHTML += `
+                <div class="input-group">
+                    <label>${day}</label>
+                    <input type="text" id="adminTime_${day}" value="${lessonsText}">
+                </div>
+            `;
+        }
+    }
+
+    async function saveNewTimetable() {
+        let newTimetable = {};
+        for(let day in timetable) {
+            let inputVal = document.getElementById(`adminTime_${day}`).value;
+            newTimetable[day] = inputVal.split(',').map(x => x.trim().toUpperCase()).filter(x => x !== '');
+        }
+        
+        let { data } = await supabaseClient.from('diary_config').select('*').single();
+        if(data) {
+            await supabaseClient.from('diary_config').update({ timetable: newTimetable }).eq('id', data.id);
+        } else {
+            await supabaseClient.from('diary_config').insert([{ timetable: newTimetable }]);
+        }
+        
+        alert("Новое расписание синхронизировано!");
+        await loadOnlineConfig();
     }
 </script>
 </body>
